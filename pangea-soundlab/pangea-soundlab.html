@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PANGEA Soundlab</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', monospace;
+      background-color: #000;
+      color: #0f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    header {
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid #0f0;
+    }
+    
+    h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      letter-spacing: 5px;
+    }
+    
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .control-panel {
+      margin-bottom: 30px;
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .slider-container {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .slider-label {
+      width: 120px;
+    }
+    
+    .slider {
+      flex: 1;
+      height: 10px;
+      background: #333;
+      outline: none;
+      -webkit-appearance: none;
+      border-radius: 5px;
+    }
+    
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #0f0;
+      cursor: pointer;
+    }
+    
+    .slider-value {
+      width: 60px;
+      text-align: right;
+    }
+    
+    .button-container {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    
+    button {
+      background-color: transparent;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 10px 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    button:hover {
+      background-color: rgba(0, 255, 0, 0.1);
+    }
+    
+    button:active {
+      background-color: rgba(0, 255, 0, 0.2);
+    }
+    
+    button.active {
+      background-color: rgba(0, 255, 0, 0.3);
+    }
+    
+    .visualization {
+      width: 100%;
+      max-width: 600px;
+      height: 200px;
+      background-color: #111;
+      border: 1px solid #0f0;
+      margin-top: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .status-text {
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+    
+    .sample-trigger {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #0f0;
+      opacity: 0;
+      transition: all 0.5s;
+    }
+    
+    .sample-trigger.active {
+      opacity: 1;
+      transform: scale(2);
+    }
+    
+    footer {
+      padding: 10px;
+      text-align: center;
+      border-top: 1px solid #0f0;
+      font-size: 0.8rem;
+    }
+    
+    .blink {
+      animation: blink 1s infinite;
+    }
+    
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PANGEA SOUNDLAB</h1>
+  </header>
+  
+  <div class="main-container">
+    <div class="control-panel">
+      <div class="slider-container">
+        <span class="slider-label">DENSITY</span>
+        <input type="range" min="1" max="30" value="10" class="slider" id="densitySlider">
+        <span class="slider-value" id="densityValue">10</span>
+      </div>
+      
+      <div class="slider-container">
+        <span class="slider-label">PITCH</span>
+        <input type="range" min="0.5" max="2" value="1" step="0.1" class="slider" id="pitchSlider">
+        <span class="slider-value" id="pitchValue">1.0</span>
+      </div>
+      
+      <div class="slider-container">
+        <span class="slider-label">REVERB</span>
+        <input type="range" min="0" max="1" value="0.2" step="0.1" class="slider" id="reverbSlider">
+        <span class="slider-value" id="reverbValue">0.2</span>
+      </div>
+      
+      <div class="slider-container">
+        <span class="slider-label">VOLUME</span>
+        <input type="range" min="0" max="1" value="0.7" step="0.1" class="slider" id="volumeSlider">
+        <span class="slider-value" id="volumeValue">0.7</span>
+      </div>
+      
+      <div class="button-container">
+        <button id="startButton">START</button>
+        <button id="stopButton">STOP</button>
+        <button id="scanButton">SCAN SAMPLES</button>
+      </div>
+    </div>
+    
+    <div class="visualization">
+      <span class="status-text" id="statusText">READY</span>
+      <!-- Sample triggers will be inserted here dynamically -->
+    </div>
+  </div>
+  
+  <footer>
+    <span>PANGEA SOUNDLAB v0.1</span>
+    <span class="blink"> | </span>
+    <span id="sampleCount">0 SAMPLES LOADED</span>
+  </footer>
+
+  <script>
+    // Audio context
+    let audioContext;
+    let mainGainNode;
+    let samples = [];
+    let samplePaths = [];
+    let isPlaying = false;
+    let activeTimeout = null;
+    let reverbNode = null;
+    let sampleTriggers = [];
+    
+    // Configuration
+    const config = {
+      density: 10,
+      pitch: 1.0,
+      reverb: 0.2,
+      volume: 0.7
+    };
+    
+    // DOM Elements
+    const densitySlider = document.getElementById('densitySlider');
+    const pitchSlider = document.getElementById('pitchSlider');
+    const reverbSlider = document.getElementById('reverbSlider');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const densityValue = document.getElementById('densityValue');
+    const pitchValue = document.getElementById('pitchValue');
+    const reverbValue = document.getElementById('reverbValue');
+    const volumeValue = document.getElementById('volumeValue');
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    const scanButton = document.getElementById('scanButton');
+    const statusText = document.getElementById('statusText');
+    const sampleCount = document.getElementById('sampleCount');
+    const visualization = document.querySelector('.visualization');
+    
+    // Initialize audio context on user interaction
+    function initAudio() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        mainGainNode = audioContext.createGain();
+        mainGainNode.gain.value = config.volume;
+        mainGainNode.connect(audioContext.destination);
+        
+        // Create reverb
+        createReverb();
+      }
+    }
+    
+    // Create a simple reverb effect
+    function createReverb() {
+      if (!audioContext) return;
+      
+      const convolver = audioContext.createConvolver();
+      const reverbTime = 3; // seconds
+      const sampleRate = audioContext.sampleRate;
+      const bufferLength = sampleRate * reverbTime;
+      const impulseResponse = audioContext.createBuffer(2, bufferLength, sampleRate);
+      
+      // Create impulse response
+      for (let channel = 0; channel < 2; channel++) {
+        const channelData = impulseResponse.getChannelData(channel);
+        for (let i = 0; i < bufferLength; i++) {
+          channelData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sampleRate * 0.1));
+        }
+      }
+      
+      convolver.buffer = impulseResponse;
+      
+      // Create a gain node for controlling reverb amount
+      const reverbGain = audioContext.createGain();
+      reverbGain.gain.value = config.reverb;
+      
+      // Connect nodes
+      convolver.connect(reverbGain);
+      reverbGain.connect(mainGainNode);
+      
+      reverbNode = {
+        convolver,
+        gain: reverbGain
+      };
+    }
+    
+    // Load a sample from the samples directory
+    async function loadSample(path) {
+      try {
+        const response = await fetch(path);
+        if (!response.ok) {
+          throw new Error(`Failed to load sample: ${path}`);
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        
+        samples.push(audioBuffer);
+        samplePaths.push(path);
+        
+        updateSampleCount();
+        
+        // Create visual trigger
+        createSampleTrigger(path);
+        
+        return audioBuffer;
+      } catch (error) {
+        console.error('Error loading sample:', error);
+        return null;
+      }
+    }
+    
+    // Scan for samples in the samples directory
+    function scanSamples() {
+      statusText.textContent = 'SCANNING...';
+      
+      // In a real implementation, this would involve checking the samples directory
+      // For this demo, let's simulate sample discovery with a timeout
+      
+      // Clear existing samples
+      samples = [];
+      samplePaths = [];
+      
+      // Clear visual triggers
+      clearSampleTriggers();
+      
+      setTimeout(() => {
+        // Simulate finding WAV samples
+        const sampleNames = [
+          'ambient1.wav', 'ambient2.wav', 'ambient3.wav', 
+          'drone1.wav', 'drone2.wav',
+          'pad1.wav', 'pad2.wav', 'pad3.wav', 
+          'texture1.wav', 'texture2.wav'
+        ];
+        
+        const loadPromises = sampleNames.map(name => 
+          loadSample(`samples/${name}`)
+        );
+        
+        Promise.all(loadPromises).then(() => {
+          statusText.textContent = 'SAMPLES LOADED';
+          updateSampleCount();
+        });
+      }, 1000);
+    }
+    
+    // Create visual representation of a sample trigger
+    function createSampleTrigger(path) {
+      const trigger = document.createElement('div');
+      trigger.className = 'sample-trigger';
+      trigger.dataset.path = path;
+      
+      // Position randomly within visualization area
+      const left = Math.random() * (visualization.clientWidth - 10);
+      const top = Math.random() * (visualization.clientHeight - 10);
+      
+      trigger.style.left = `${left}px`;
+      trigger.style.top = `${top}px`;
+      
+      visualization.appendChild(trigger);
+      sampleTriggers.push(trigger);
+    }
+    
+    // Clear all sample triggers
+    function clearSampleTriggers() {
+      sampleTriggers.forEach(trigger => {
+        if (trigger.parentNode) {
+          trigger.parentNode.removeChild(trigger);
+        }
+      });
+      
+      sampleTriggers = [];
+    }
+    
+    // Play a random sample
+    function playRandomSample() {
+      if (!samples.length || !isPlaying) {
+        return;
+      }
+      
+      const index = Math.floor(Math.random() * samples.length);
+      const sample = samples[index];
+      
+      // Create source node
+      const source = audioContext.createBufferSource();
+      source.buffer = sample;
+      source.playbackRate.value = config.pitch;
+      
+      // Connect through reverb based on setting
+      const dryGain = audioContext.createGain();
+      dryGain.gain.value = 1 - config.reverb;
+      
+      source.connect(dryGain);
+      dryGain.connect(mainGainNode);
+      
+      if (reverbNode && config.reverb > 0) {
+        source.connect(reverbNode.convolver);
+        reverbNode.gain.gain.value = config.reverb;
+      }
+      
+      // Start playback
+      source.start();
+      
+      // Visualize the triggered sample
+      const trigger = sampleTriggers[index];
+      if (trigger) {
+        trigger.classList.add('active');
+        setTimeout(() => {
+          trigger.classList.remove('active');
+        }, 500);
+      }
+      
+      // Schedule next sample
+      const interval = 60000 / config.density;
+      const variation = interval * 0.5; // Add some randomness
+      const nextTime = interval + (Math.random() * variation - variation/2);
+      
+      activeTimeout = setTimeout(playRandomSample, nextTime);
+    }
+    
+    // Start playback
+    function startPlayback() {
+      if (isPlaying) return;
+      
+      initAudio();
+      
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      if (samples.length === 0) {
+        statusText.textContent = 'NO SAMPLES LOADED';
+        return;
+      }
+      
+      isPlaying = true;
+      startButton.classList.add('active');
+      stopButton.classList.remove('active');
+      statusText.textContent = 'PLAYING';
+      
+      playRandomSample();
+    }
+    
+    // Stop playback
+    function stopPlayback() {
+      if (!isPlaying) return;
+      
+      isPlaying = false;
+      startButton.classList.remove('active');
+      stopButton.classList.add('active');
+      statusText.textContent = 'STOPPED';
+      
+      if (activeTimeout) {
+        clearTimeout(activeTimeout);
+        activeTimeout = null;
+      }
+    }
+    
+    // Update sample count display
+    function updateSampleCount() {
+      sampleCount.textContent = `${samples.length} SAMPLES LOADED`;
+    }
+    
+    // Event listeners
+    densitySlider.addEventListener('input', () => {
+      config.density = parseInt(densitySlider.value);
+      densityValue.textContent = config.density;
+    });
+    
+    pitchSlider.addEventListener('input', () => {
+      config.pitch = parseFloat(pitchSlider.value);
+      pitchValue.textContent = config.pitch.toFixed(1);
+    });
+    
+    reverbSlider.addEventListener('input', () => {
+      config.reverb = parseFloat(reverbSlider.value);
+      reverbValue.textContent = config.reverb.toFixed(1);
+      
+      if (reverbNode) {
+        reverbNode.gain.gain.value = config.reverb;
+      }
+    });
+    
+    volumeSlider.addEventListener('input', () => {
+      config.volume = parseFloat(volumeSlider.value);
+      volumeValue.textContent = config.volume.toFixed(1);
+      
+      if (mainGainNode) {
+        mainGainNode.gain.value = config.volume;
+      }
+    });
+    
+    startButton.addEventListener('click', startPlayback);
+    stopButton.addEventListener('click', stopPlayback);
+    scanButton.addEventListener('click', () => {
+      initAudio();
+      scanSamples();
+    });
+    
+    // Initialize the app
+    window.onload = () => {
+      statusText.textContent = 'READY - CLICK SCAN TO LOAD SAMPLES';
+    };
+  </script>
+</body>
+</html>
